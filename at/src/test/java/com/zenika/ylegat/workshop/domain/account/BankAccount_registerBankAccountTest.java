@@ -1,8 +1,8 @@
 package com.zenika.ylegat.workshop.domain.account;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
+import org.assertj.core.api.Assertions;
 import org.junit.Test;
+
 import com.zenika.ylegat.workshop.domain.common.ConflictingEventException;
 
 public class BankAccount_registerBankAccountTest extends AbstractBankAccountTesting {
@@ -13,7 +13,8 @@ public class BankAccount_registerBankAccountTest extends AbstractBankAccountTest
         /**
          * when bank account is registered (instantiate a bank account and call BankAccount.registerBankAccount)
          */
-
+    	final BankAccount bankAccount = new BankAccount(eventStore);
+    	bankAccount.registerBankAccount("bankAccountId");
         // Then
         /**
          * 1. assert that the events associated to the bank account contains exactly one BankAccountRegistered event (use assertThatEvents method defined in the superclass)
@@ -22,6 +23,8 @@ public class BankAccount_registerBankAccountTest extends AbstractBankAccountTest
          * * its credit should be equal to 0
          * * its version should be 1 (one event has been applied on the bank account)
          */
+    	assertThatEvents("bankAccountId").containsExactly(new BankAccountRegistered("bankAccountId"));
+    	Assertions.assertThat(bankAccount).isEqualTo(new BankAccount("bankAccountId", eventStore, 0, 1));
     }
 
     @Test
@@ -30,17 +33,21 @@ public class BankAccount_registerBankAccountTest extends AbstractBankAccountTest
         /**
          * Given a bank account registered (instantiate a bank account and call BankAccount.registerBankAccount)
          */
-
+    	final BankAccount bankAccount = new BankAccount(eventStore);
+    	bankAccount.registerBankAccount("bankAccountId");
         // When
         /**
          * When a bank account with the same id is registered (use Assertions.catchThrowable(() -> call_registerBankAccount_here() to catch the exception)
          */
-
+    	final BankAccount bankAccount2 = new BankAccount(eventStore);
+    	final Throwable throwable = Assertions.catchThrowable(() -> bankAccount2.registerBankAccount("bankAccountId"));
         // Then
         /**
          * 1. assert that the command thrown a ConflictingEventException exception
          * 2. assert that the events associated to the bank account contains exactly one BankAccountRegistered event
          */
+    	Assertions.assertThat(throwable).isInstanceOfAny(ConflictingEventException.class);
+    	
     }
 
 }

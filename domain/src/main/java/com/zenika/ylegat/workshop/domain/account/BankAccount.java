@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.common.annotations.VisibleForTesting;
@@ -15,6 +17,7 @@ import com.zenika.ylegat.workshop.domain.common.Event;
 import com.zenika.ylegat.workshop.domain.common.EventListener;
 import com.zenika.ylegat.workshop.domain.common.EventStore;
 import com.zenika.ylegat.workshop.domain.common.EvolutionFunction;
+import com.zenika.ylegat.workshop.domain.common.InvalidCommandException;
 
 public class BankAccount {
 
@@ -83,6 +86,10 @@ public class BankAccount {
          * 3. load the new event from the event store (eventStore.load(id, version + 1))
          * 4. apply the loaded event (eventProcessor.on(event))
          */
+    	final BankAccountRegistered event = new BankAccountRegistered(bankAccountId);
+    	eventStore.save(0, event);
+    	final List<Event> events = eventStore.load(bankAccountId, 1);
+    	events.forEach(e -> eventProcessor.on(e));
     }
 
     @DecisionFunction
@@ -93,6 +100,9 @@ public class BankAccount {
          * 3. load the new event from the event store (eventStore.load(id, version + 1))
          * 4. apply the loaded event (eventProcessor.on(event))
          */
+    	final CreditProvisioned event = new CreditProvisioned("bankAccountId", creditToProvision, creditToProvision + creditBalance);
+    	eventStore.save(version, event);
+    	eventStore.load("bankAccountId", version + 1).forEach(eventProcessor::on);
     }
 
     @DecisionFunction
@@ -104,6 +114,13 @@ public class BankAccount {
          * 4. load the new event from the event store (eventStore.load(id, version + 1))
          * 5. apply the loaded event (eventProcessor.on(event))
          */
+    	final int newBalance = creditBalance - creditToWithdraw;
+    	if (newBalance < 0) {
+    		throw new InvalidCommandException();
+    	}
+    	final CreditWithdrawn event = new CreditWithdrawn(id, creditToWithdraw, newBalance);
+    	eventStore.save(version, event);
+    	eventStore.load(id, version + 1).forEach(eventProcessor::on);
     }
 
     @DecisionFunction
@@ -116,8 +133,15 @@ public class BankAccount {
          * 5. load the new event from the event store (eventStore.load(id, version + 1))
          * 6. apply the loaded event (eventProcessor.on(event))
          */
-
-        return null;
+    	final int newBalance = creditBalance - creditToTransfer;
+    	if (id.equals(bankAccountDestinationId) || newBalance < 0) {
+    		throw new InvalidCommandException();
+    	}
+    	final String transferId = UUID.randomUUID().toString();
+		final TransferInitialized event = new TransferInitialized(id, bankAccountDestinationId, transferId, creditToTransfer, newBalance);
+    	eventStore.save(version, event);
+    	eventStore.load(id, version + 1).forEach(eventProcessor::on);
+        return transferId;
     }
 
     @DecisionFunction
@@ -192,6 +216,7 @@ public class BankAccount {
             /**
              * 1. affect the event's aggregate id to this id
              */
+        	id = bankAccountRegistered.aggregateId;
         }
 
         @Override
@@ -200,6 +225,7 @@ public class BankAccount {
             /**
              * 1. affect the event's new credit balance to this credit balance
              */
+        	creditBalance = creditProvisioned.newCreditBalance;
         }
 
         @Override
@@ -208,6 +234,7 @@ public class BankAccount {
             /**
              * 1. affect the event's new credit balance to this credit balance
              */
+        	creditBalance = creditWithdrawn.newCreditBalance;
         }
 
         @Override
